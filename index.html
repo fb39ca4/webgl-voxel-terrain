@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html><head>
+<title>WebGL Voxel Demo</title>
+<meta http-equiv="content-type" content="text/html; charset=utf8">
+<script type="text/javascript" src="glhelper.js"></script>
+<script type="text/javascript" src="gl-matrix.js"></script>
+<script type="text/javascript" src="inputhelper.js"></script>
+<script type="text/javascript" src="simplex-noise.js" id="simplex-noise.js"></script>
+<script type="text/javascript" src="voxel-worker.js"></script>
+<script type="text/javascript" src="chunkmanager.js"></script>
+<script type="text/javascript" src="voxel.js"></script>
+
+<script type="text/javascript">
+
+function getUrlParams() {
+  var raw = window.location.search.substring(1).split("&");
+  var processed = {};
+  for (var i = 0; i < raw.length; i++) {
+    var name = raw[i].substring(0, raw[i].indexOf("="));
+    var arg = raw[i].substring(raw[i].indexOf("=") + 1);
+    if (name) processed[name] = arg;
+  }
+  return processed;
+}
+
+var threadCount;
+
+function engineInit() {
+    threadCount = parseInt(getUrlParams().threads, 10) || navigator.hardwareConcurrency || 4;
+    threadCount = Math.max(1, threadCount);
+    document.getElementById("threadCountDisplay").innerHTML = threadCount.toString();
+    glhelper = new GlHelper(document.getElementById("canvas"));
+    voxelengine = new VoxelEngine();
+    voxelengine.renderSetup(glhelper);
+    voxelengine.tick();
+    //runGenerator(8,8,8);
+}
+
+</script>
+
+
+</head>
+
+
+<body onload="engineInit();">
+    <div>WebGL Voxel Terrain Demo by fb39ca4</div>
+    <canvas id="canvas" style="border: none;" width="1280" height="720"></canvas>
+    <br>
+    <div>Controls: WASDRF to move, click and drag to turn.</div>
+    <div id="CPUDisplay">Running with <span id="threadCountDisplay">_</span> chunk generation threads. Add ?threads=<i>n</i> to the URL to run with <i>n</i> threads.</div>
+    <div id="playerDisplay"></div>
+    <div id="mouseDisplay">Mouse: {}</div>
+    <div id="keyboardDisplay">Keyboard: {}</div>
+    <div id="engineDisplay"></div>
+    
+</body></html>

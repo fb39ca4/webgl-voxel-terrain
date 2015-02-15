@@ -1,0 +1,199 @@
+function Chunk(x, y, z) {
+    this.pos = vec3.fromValues(x, y, z);
+    this.loaded = false;
+    this.deleted = false;
+    this.empty = undefined;
+    this.key = "x" + x + "y" + y + "z" + z;
+}
+
+function ChunkManager(chunkSize) {
+    this.chunkSize = chunkSize;
+    this.chunks = {};
+    this.viewDistance = null;
+    this.glBufferCreator = null;
+    this.glBufferDeleter = null;
+    
+    this.chunkGenerator = new MultiChunkGenerator(this.chunkSize);
+    this.chunkGenerator.chunkTaker = this.takeChunkMesh.bind(this);
+    console.log(this.takeChunkMesh);
+}
+
+ChunkManager.prototype.deleteFarChunks = function(player) {
+    var chunkOffset = vec3.create();
+    var offset = vec3.create();
+    var chunkCenter = vec3.fromValues(0.5, 0.5, 0.5);
+    vec3.scale(chunkCenter, chunkCenter, this.chunkSize);
+    var boundingRadius = vec3.length(chunkCenter);
+    var distances = [];
+    for (var i in this.chunks) {
+        chunk = this.chunks[i];
+        vec3.subtract(chunkOffset, chunk.pos, player.chunkPos);
+        vec3.subtract(offset, chunkCenter, player.pos);
+        vec3.scaleAndAdd(offset, offset, chunkOffset, this.chunkSize);
+        var distance = vec3.length(offset);
+        if (distance > this.viewDistance + boundingRadius) {
+            var x = chunk.pos[0]; var y = chunk.pos[1]; var z = chunk.pos[2];
+            this.unloadChunk(x, y, z);
+        }
+    }
+}
+
+ChunkManager.prototype.loadNearChunks = function(player) {
+    var chunkOffset = vec3.fromValues(0.5, 0.5, 0.5);
+    var offset = vec3.create();
+    var chunkCenter = vec3.fromValues(0.5, 0.5, 0.5);
+    vec3.scale(chunkCenter, chunkCenter, this.chunkSize);
+    var boundingRadius = vec3.length(chunkCenter);
+    var distance3 = vec3.fromValues(this.viewDistance, this.viewDistance, this.viewDistance);
+    var distances = [];
+    
+    var min = vec3.create();
+    var max = vec3.create();
+    vec3.subtract(min, player.pos, distance3);
+    vec3.scale(min, min, 1/this.chunkSize);
+    vec3.add(max, player.pos, distance3);
+    vec3.scale(max, max, 1/this.chunkSize);
+    for (i in [0,1,2]) {
+        min[i] = Math.floor(min[i]);
+        max[i] = Math.ceil(max[i]);
+    } 
+    var chunkPos = vec3.create();
+    for (var x = min[0]; x < max[0]; x++) {
+        for (var y = min[1]; y < max[1]; y++) {
+            for (var z = min[2]; z < max[2]; z++) {
+                vec3.set(chunkPos, x, y, z);
+                vec3.add(chunkPos, chunkPos, chunkOffset);
+                vec3.scaleAndAdd(offset, chunkPos, player.pos, -1.0 / this.chunkSize);
+                var distance = vec3.length(offset)
+                //console.log(x, y, z, offset[0], offset[1], offset[2], distance);
+                if (distance < this.viewDistance / this.chunkSize) {
+                    //console.log("pass", distance * this.chunkSize);
+                    this.requestChunkLoad(x, y, z);
+                }
+            }
+        }
+    }
+}
+
+ChunkManager.prototype.getKey = function(x, y, z) { return "x" + x + "y" + y + "z" + z; };
+
+ChunkManager.prototype.queryChunk = function(key) {
+    return this.chunks.hasOwnProperty(key);
+};
+
+ChunkManager.prototype.getChunk = function(x, y, z) {
+    var key = this.getKey(x, y, z);
+    return this.chunks[key];
+};
+
+ChunkManager.prototype.requestChunkLoad = function(x, y, z) {
+    var key = this.getKey(x, y, z);
+    var chunk;
+    if (this.chunks.hasOwnProperty(key)) {
+        chunk = this.chunks[key];
+    }
+    else {
+        chunk = new Chunk(x, y, z);
+        this.chunks[key] = chunk;
+        this.loadChunk(chunk);
+    }
+};
+
+ChunkManager.prototype.loadChunk = function(chunk) {
+    //this.chunkGenerator.requestChunk(x, y, z);
+    this.chunkGenerator.requestChunk(chunk);
+};
+
+ChunkManager.prototype.takeChunkMesh = function(x, y, z, vertexData) {
+    var key = this.getKey(x, y, z);
+    console.log(key);
+    var chunk = this.chunks[key];
+    if (typeof chunk == "undefined") return;
+    if (vertexData.byteLength == 0) {
+        chunk.loaded = true;
+        chunk.empty = true;
+        return;
+    }
+    var glBuffer = this.glBufferCreator(vertexData);
+    chunk.vertexBuffer = glBuffer;
+    chunk.loaded = true;
+}
+
+ChunkManager.prototype.unloadChunk = function(x, y, z) {
+    var key = this.getKey(x, y, z);
+    if (typeof this.chunks[key] == "undefined") return;
+    var chunk = this.chunks[key];
+    chunk.deleted = true;
+    chunk.loaded = false;
+    if (typeof chunk.vertexData != "undefined") {
+        this.glBufferDeleter(this.chunks[key].vertexData);
+    }
+    delete this.chunks[key];
+};
+
+function MultiChunkGenerator(chunkSize) {
+    this.chunkSize = chunkSize;
+    this.numWorkers = Math.max(threadCount, 1);
+    this.workers = [];
+    this.queue = [];
+    this.chunkTaker = null;
+
+    this.handleMessage = function(e) {
+        var message = e.data;
+        if (message.command == "takechunk") {
+            console.log(message.x+","+message.y+","+message.z + " generated by worker " + message.id + ".");
+            if (!this.workers[message.id].currentChunk.deleted) {
+                this.chunkTaker(message.x, message.y, message.z, message.vertices);
+            }
+            this.workers[message.id].currentChunk = null;
+            this.workers[message.id].idle = true;
+            this.dispatchWork();
+        }
+        else if (message.command == "ping") {
+            console.log(message);
+        }
+        else if (message.command == "ready") {
+            console.log("Worker " + message.id + " is ready.");
+            this.workers[message.id].idle = true;
+            this.dispatchWork();
+        }
+    }.bind(this);
+    
+    
+    this.noiseParams = new Uint8Array(256);
+    for (var i = 0; i < 256; i++) {
+        this.noiseParams[i] = Math.random() * 256;
+    }
+    
+    for (var i = 0; i < this.numWorkers; i++) {
+        this.workers[i] = new Worker("multiworkerscript.js");
+        this.workers[i].id = i;
+        this.workers[i].onmessage = this.handleMessage;
+        this.workers[i].postMessage({command:"setup",id:i,perm:this.noiseParams,chunkSize:this.chunkSize});
+        this.workers[i].idle = false;
+        this.workers.currentChunk = null;
+    }
+}
+
+MultiChunkGenerator.prototype.dispatchWork = function() {
+    for (var i = 0; i < this.numWorkers; i++) {
+        if (this.queue.length <= 0) break;
+        var worker = this.workers[i];
+        if (worker.idle == true) {
+            do {
+                if (this.queue.length == 0) return;
+                worker.currentChunk = this.queue.shift();
+            } while (worker.currentChunk.deleted == true);
+            var pos = worker.currentChunk.pos;
+            worker.idle = false;
+            worker.postMessage({command:"genchunk",x:pos[0],y:pos[1],z:pos[2]});
+        }
+    }
+    return;
+}
+
+MultiChunkGenerator.prototype.requestChunk = function(chunk) {
+    //this.worker.postMessage({command:"genchunk",x:x,y:y,z:z});
+    this.queue.push(chunk);
+    this.dispatchWork();
+}
