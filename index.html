@@ -18,16 +18,19 @@ function getUrlParams() {
   for (var i = 0; i < raw.length; i++) {
     var name = raw[i].substring(0, raw[i].indexOf("="));
     var arg = raw[i].substring(raw[i].indexOf("=") + 1);
-    if (name) processed[name] = arg;
+    if (name) processed[name.toLowerCase()] = arg;
   }
   return processed;
 }
 
-var threadCount;
+var threadCount, viewDistace, chunkSize, moveSpeed;
 
 function engineInit() {
     threadCount = parseInt(getUrlParams().threads, 10) || navigator.hardwareConcurrency || 4;
     threadCount = Math.max(1, threadCount);
+    viewDistance = parseInt(getUrlParams().viewdistance, 10) || 128;
+    chunkSize = parseInt(getUrlParams().chunksize, 10) || 32;
+    moveSpeed = parseInt(getUrlParams().movespeed, 10) || 25;
     document.getElementById("threadCountDisplay").innerHTML = threadCount.toString();
     glhelper = new GlHelper(document.getElementById("canvas"));
     voxelengine = new VoxelEngine();
@@ -48,6 +51,7 @@ function engineInit() {
     <br>
     <div>Controls: WASDRF to move, click and drag to turn.</div>
     <div id="CPUDisplay">Running with <span id="threadCountDisplay">_</span> chunk generation threads. Add ?threads=<i>n</i> to the URL to run with <i>n</i> threads.</div>
+    <div>Additional URL options: viewdistance, chunksize, movespeed. Example for low end systems: ?viewdistance=64&chunksize=16</div>
     <div id="playerDisplay"></div>
     <div id="mouseDisplay">Mouse: {}</div>
     <div id="keyboardDisplay">Keyboard: {}</div>
