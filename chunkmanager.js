@@ -3,6 +3,7 @@ function Chunk(x, y, z) {
     this.loaded = false;
     this.deleted = false;
     this.empty = undefined;
+    this.loadPriority = 0;
     this.key = "x" + x + "y" + y + "z" + z;
 }
 
@@ -137,6 +138,7 @@ function MultiChunkGenerator(chunkSize) {
     this.workers = [];
     this.queue = [];
     this.chunkTaker = null;
+    this.priorityFunction = function() {return 1.0};
 
     this.handleMessage = function(e) {
         var message = e.data;
@@ -175,13 +177,32 @@ function MultiChunkGenerator(chunkSize) {
     }
 }
 
+MultiChunkGenerator.prototype.sortChunks = function() {
+    var filterFunction = function(chunk) {
+        if (chunk.deleted) return false;
+        else return true;
+    };
+    for (i in this.queue) {
+        this.queue[i].loadPriority = this.priorityFunction(this.queue[i].pos);
+    }
+    this.queue = this.queue.filter(filterFunction);
+    var sortFunction = function(chunkA, chunkB) {
+        return chunkB.loadPriority - chunkA.loadPriority;
+    };
+    this.queue.sort(sortFunction);
+}
+
 MultiChunkGenerator.prototype.dispatchWork = function() {
+    this.sortChunks();
     for (var i = 0; i < this.numWorkers; i++) {
         if (this.queue.length <= 0) break;
         var worker = this.workers[i];
         if (worker.idle == true) {
             do {
-                if (this.queue.length == 0) return;
+                if (this.queue.length == 0) { 
+                    worker.currentChunk = null;
+                    return;
+                }
                 worker.currentChunk = this.queue.shift();
             } while (worker.currentChunk.deleted == true);
             var pos = worker.currentChunk.pos;

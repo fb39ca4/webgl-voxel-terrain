@@ -2,6 +2,7 @@ function VoxelEngine() {
     this.chunkSize = 32;
     this.viewDistance = 192;
     this.player = new Player(this.chunkSize);
+    this.player.viewDistance = this.viewDistance;
     this.chunkManager = new ChunkManager(this.chunkSize);
     this.chunkManager.viewDistance = this.viewDistance;
     this.lastTick = Date.now();
@@ -37,6 +38,8 @@ VoxelEngine.prototype.renderSetup = function(glHelper) {
     
     this.chunkManager.glBufferCreator = this.glh.createBuffer.bind(this.glh);
     this.chunkManager.glBufferDeleter = this.glh.gl.deleteBuffer;
+    
+    this.chunkManager.chunkGenerator.priorityFunction = this.player.chunkPriority.bind(this.player);
     
     var vertexShaderSource = "attribute vec4 aPos; attribute vec4 aColor; uniform mat4 uTransform; varying vec4 vColor; void main(void) { gl_Position = uTransform * aPos; vColor = aColor; }"
     var fragmentShaderSource = "precision mediump float; varying vec4 vColor; void main(void) { gl_FragColor = vColor; }"
@@ -109,6 +112,7 @@ function Player(chunkSize) {
     this.chunkCoordinate = new Coord3();
     this.rotH = 0;
     this.rotV = 0;
+    this.moveSpeed = 50;
     
     this.chunkPos = vec3.create();
     this.pos = vec3.create();
@@ -121,6 +125,27 @@ function Player(chunkSize) {
     mat4.lookAt(this.cameraMatrix, this.pos, this.viewForward, this.viewUp);
     this.viewQuat = quat.create();
     quat.fromMat3(this.viewQuat, this.cameraMatrix);
+    
+    this.tempVec3 = vec3.create();
+}
+
+Player.prototype.chunkPriority = function(chunkCoord) {
+    function lerp(a, b, t) {
+        return a * (1-t) + b * t;
+    }
+    
+    var offset = this.tempVec3;
+    vec3.subtract(offset, chunkCoord, this.chunkPos);
+    vec3.add(offset, offset, [0.5, 0.5, 0.5]);
+    vec3.scale(offset, offset, this.chunkSize);
+    vec3.subtract(offset, offset, this.pos);
+    
+    var distance = vec3.length(offset) / this.viewDistance;
+    var forwards = vec3.dot(offset, this.viewForward) / distance;
+    
+    if (distance < 0.25) return lerp(1, 2/3, distance * 4);
+    else if (forwards > 0.75) return lerp(2/3, 1/3, distance * 4/3);
+    else return lerp(1/3, 0, distance * 4/3);
 }
 
 Player.prototype.normalizePosition = function() {
@@ -166,7 +191,7 @@ Player.prototype.tick = function(dt) {
     vec3.set(this.viewRight, Math.sin(this.rotH), -Math.cos(this.rotH), 0);
     vec3.cross(this.viewUp, this.viewRight, this.viewForward);
        
-    var moveAmout = 25 * dt;
+    var moveAmout = this.moveSpeed * dt;
     if (keyboard[87]) vec3.scaleAndAdd(this.pos, this.pos, this.viewForward, moveAmout);
     if (keyboard[83]) vec3.scaleAndAdd(this.pos, this.pos, this.viewForward, -moveAmout);
     if (keyboard[68]) vec3.scaleAndAdd(this.pos, this.pos, this.viewRight, moveAmout);
@@ -178,6 +203,7 @@ Player.prototype.tick = function(dt) {
     this.cameraMatrix = mat4.create();
     mat4.lookAt(this.cameraMatrix, this.pos, this.viewFocus, this.viewUp);
 }
+
 
 function CombinedCoordinate(x, y, z, n) {
     modulo = function(a, n) {
