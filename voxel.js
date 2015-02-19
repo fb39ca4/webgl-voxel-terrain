@@ -1,6 +1,6 @@
 function VoxelEngine() {
-    this.chunkSize = 32;
-    this.viewDistance = 192;
+    this.chunkSize = chunkSize;
+    this.viewDistance = viewDistance;
     this.player = new Player(this.chunkSize);
     this.player.viewDistance = this.viewDistance;
     this.chunkManager = new ChunkManager(this.chunkSize);
@@ -112,7 +112,7 @@ function Player(chunkSize) {
     this.chunkCoordinate = new Coord3();
     this.rotH = 0;
     this.rotV = 0;
-    this.moveSpeed = 50;
+    this.moveSpeed = moveSpeed;
     
     this.chunkPos = vec3.create();
     this.pos = vec3.create();
