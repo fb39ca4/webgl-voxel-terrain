@@ -37,7 +37,7 @@
         x *= 0.025;
         y *= 0.025;
         //return x * x + y * y + 20 - z + 25 * n1 + 1000 * n2;
-        return x * x + y * y + 20 - z + 50 * n1 + 25 * n1 + 100 * n2;
+        return 50 * n1 + 25 * n1 + 100 * n2;
         //return 32 + 20 * Math.sin(x * 0.0125) * Math.sin(y * 0.0125) - z; 
     }
     

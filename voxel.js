@@ -70,6 +70,7 @@ VoxelEngine.prototype.render = function() {
         if (chunk.loaded == false) continue;
         numLoaded++;
         if (chunk.empty == true) continue;
+        if (this.player.chunkInView(chunk.pos) == false) continue;
         
         numDrawCalls++;
         var modelMatrix = mat4.create();
@@ -146,6 +147,20 @@ Player.prototype.chunkPriority = function(chunkCoord) {
     if (distance < 0.25) return lerp(1, 2/3, distance * 4);
     else if (forwards > 0.75) return lerp(2/3, 1/3, distance * 4/3);
     else return lerp(1/3, 0, distance * 4/3);
+}
+
+Player.prototype.chunkInView = function(chunkCoord) {
+    var offset = this.tempVec3;
+    vec3.subtract(offset, chunkCoord, this.chunkPos);
+    vec3.add(offset, offset, [0.5, 0.5, 0.5]);
+    vec3.scale(offset, offset, this.chunkSize);
+    vec3.subtract(offset, offset, this.pos);
+    
+    var distance = vec3.length(offset);
+    var forwards = vec3.dot(offset, this.viewForward) / distance;
+    
+    if ((forwards - 0.75) + (this.chunkSize * (Math.sqrt(3.0) / 2.0) / distance) > 0.0) return true;
+    else return false;
 }
 
 Player.prototype.normalizePosition = function() {
