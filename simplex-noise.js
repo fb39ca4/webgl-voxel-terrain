@@ -40,15 +40,10 @@ var F2 = 0.5 * (Math.sqrt(3.0) - 1.0),
     G4 = (5.0 - Math.sqrt(5.0)) / 20.0;
 
 
-function SimplexNoise(random) {
-    if (!random) random = Math.random;
-    this.p = new Uint8Array(256);
+function SimplexNoise(perms) {
     this.perm = new Uint8Array(512);
     this.permMod12 = new Uint8Array(512);
-    for (var i = 0; i < 256; i++) {
-        this.p[i] = random() * 256;
-    }
-    for (i = 0; i < 512; i++) {
+    for (var i = 0; i < 512; i++) {
         this.perm[i] = this.p[i & 255];
         this.permMod12[i] = this.perm[i] % 12;
     }
